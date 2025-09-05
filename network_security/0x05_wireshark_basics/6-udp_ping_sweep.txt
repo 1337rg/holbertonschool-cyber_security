@@ -1,1 +1,1 @@
-udp
+udp && udp.length == 0 && udp.srcport >= 49152 && udp.dstport != 53 && udp.dstport != 7
